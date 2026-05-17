@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Neuro Check</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 2em;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 500px;
+            margin: auto;
+            background: white;
+            padding: 2em;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .hidden { display: none; }
+        input, button {
+            width: 100%;
+            padding: 0.7em;
+            margin: 0.7em 0;
+            box-sizing: border-box;
+            font-size: 1em;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover { background: #0056b3; }
+        .error { color: red; margin-top: 0.5em; }
+        .secondary { background: #6c757d; }
+        .secondary:hover { background: #5a6268; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <!-- Форма логина -->
+    <div id="login-section">
+        <h2>Вход</h2>
+        <input type="password" id="password" placeholder="Пароль" autofocus>
+        <button onclick="login()">Войти</button>
+        <p id="login-error" class="error"></p>
+    </div>
+
+    <!-- Рабочая область -->
+    <div id="app-section" class="hidden">
+        <h2>Обработка видео</h2>
+        <input type="file" id="video-file" accept="video/*">
+        <button onclick="processVideo()">Загрузить и обработать</button>
+        <p id="process-error" class="error"></p>
+        <p id="result-link" style="color: green;"></p>
+        <button onclick="logout()" class="secondary">Выйти</button>
+    </div>
+</div>
+
+<script>
+    let token = localStorage.getItem('access_token');
+
+    window.onload = () => {
+        token ? showApp() : showLogin();
+    };
+
+    function showLogin() {
+        document.getElementById('login-section').classList.remove('hidden');
+        document.getElementById('app-section').classList.add('hidden');
+    }
+
+    function showApp() {
+        document.getElementById('login-section').classList.add('hidden');
+        document.getElementById('app-section').classList.remove('hidden');
+    }
+
+    async function login() {
+        const password = document.getElementById('password').value;
+        document.getElementById('login-error').textContent = '';
+        try {
+            const formData = new FormData();
+            formData.append('password', password);
+            const response = await fetch('/api/login', {
+                method: 'POST',
+                body: formData
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || 'Ошибка входа');
+            }
+            const data = await response.json();
+            token = data.access_token;
+            localStorage.setItem('access_token', token);
+            showApp();
+        } catch (e) {
+            document.getElementById('login-error').textContent = e.message;
+        }
+    }
+
+    async function processVideo() {
+        const fileInput = document.getElementById('video-file');
+        const file = fileInput.files[0];
+        if (!file) {
+            alert('Выберите видеофайл');
+            return;
+        }
+        document.getElementById('process-error').textContent = '';
+        document.getElementById('result-link').innerHTML = '';
+        try {
+            const formData = new FormData();
+            formData.append('video', file);
+            const response = await fetch('/api/process', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + token
+                },
+                body: formData
+            });
+            if (!response.ok) {
+                if (response.status === 401) {
+                    logout();
+                    throw new Error('Сессия истекла, войдите заново');
+                }
+                const err = await response.json();
+                throw new Error(err.detail || 'Ошибка обработки');
+            }
+            // Автоматическая загрузка файла
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'result.csv';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            document.getElementById('result-link').innerHTML = 'Скачивание началось.';
+        } catch (e) {
+            document.getElementById('process-error').textContent = e.message;
+        }
+    }
+
+    function logout() {
+        localStorage.removeItem('access_token');
+        token = null;
+        showLogin();
+        document.getElementById('password').value = '';
+    }
+</script>
+</body>
+</html>

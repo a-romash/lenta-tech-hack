@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  neuro-app:
+    build: .
+    container_name: neuro-checker
+    ports:
+      - "8000:8000"
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - PASSWORD_HASH=${PASSWORD_HASH}
+      - TOKEN_EXPIRE_MINUTES=${TOKEN_EXPIRE_MINUTES:-60}
+    restart: unless-stopped
